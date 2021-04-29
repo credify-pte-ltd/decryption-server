@@ -1,7 +1,7 @@
 const express = require("express");
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { Signing } = require('@credify/crypto');
+const { Signing, Encryption } = require('@credify/crypto');
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
@@ -12,28 +12,64 @@ app.get('/', function (req, res) {
   res.send('hello world')
 });
 
-app.post('/decrypt', function (req, res) {
-  const { password, signing_secret } = req.body;
-  if (!password || !signing_secret) {
+app.post('/decrypt', async function (req, res) {
+  const { password, signing_secret, encryption_secret } = req.body;
+  if (!password) {
     return res.send("invalid body");
   }
   const s = new Signing();
-  s.importPrivateKey(signing_secret, password);
-  const key = s.exportPrivateKey();
-  const response = { key };
-  res.json(response);
+  const e = new Encryption();
+  if (signing_secret) {
+    s.importPrivateKey(signing_secret, password);
+  }
+  if (encryption_secret) {
+    await e.importPrivateKey(encryption_secret, password);
+  }
+  let signing_private_key = "";
+  let encryption_private_key = "";
+  try {
+    signing_private_key = s.exportPrivateKey();
+  } catch (e) {
+    console.log(e);
+  }
+  try {
+    encryption_private_key = await e.exportPrivateKey();
+  } catch (e) {
+    console.log(e);
+  }
+
+  const response = { signing_private_key, encryption_private_key };
+  await res.json(response);
 });
 
-app.post('/encrypt', function (req, res) {
-  const { password, key } = req.body;
-  if (!password || !key) {
+app.post('/encrypt', async function (req, res) {
+  const { password, signing_private_key, encryption_private_key } = req.body;
+  if (!password) {
     return res.send("invalid body");
   }
   const s = new Signing();
-  s.importPrivateKey(key);
-  const signing_secret = s.exportPrivateKey(password);
-  const response = { signing_secret };
-  res.json(response);
+  const e = new Encryption();
+  if (signing_private_key) {
+    s.importPrivateKey(signing_private_key);
+  }
+  if (encryption_private_key) {
+    await e.importPrivateKey(encryption_private_key)
+  }
+  let signing_secret = "";
+  let encryption_secret = "";
+  try {
+    signing_secret = s.exportPrivateKey(password);
+  } catch (e) {
+    console.log(e);
+  }
+  try {
+    encryption_secret = await e.exportPrivateKey(password);
+  } catch (e) {
+    console.log(e);
+  }
+
+  const response = { signing_secret, encryption_secret };
+  await res.json(response);
 });
 
 app.listen(port);
